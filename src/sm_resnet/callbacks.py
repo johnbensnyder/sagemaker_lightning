@@ -3,6 +3,10 @@ import pickle, gzip
 import torch
 import pytorch_lightning as pl
 from time import time
+from pathlib import Path
+
+import smdebug.pytorch as smd
+from smdebug.core.config_constants import DEFAULT_CONFIG_FILE_PATH
 
 world_size = int(os.environ.get("WORLD_SIZE", 1))
 rank = int(os.environ.get("RANK", 0))
@@ -41,7 +45,7 @@ class PlSageMakerLogger(pl.Callback):
 
 class ProfilerCallback(pl.Callback):
     
-    def __init__(self, start_step=100, num_steps=10, output_dir='/opt/ml/checkpoints/profiler/'):
+    def __init__(self, start_step=200, num_steps=25, output_dir='/opt/ml/checkpoints/profiler/'):
         super().__init__()
         self.__dict__.update(locals())
         self.step = 0
@@ -59,8 +63,40 @@ class ProfilerCallback(pl.Callback):
             self.profiler.__enter__()
     
     def on_train_batch_end(self, trainer, module, *args, **kwargs):
-        if self.step>=self.start_step and self.step<=self.start_step + self.num_steps + 10:
+        if self.step>=self.start_step and self.step<=self.start_step + self.num_steps:
             self.profiler.step()
         if self.step==self.start_step + self.num_steps:
             self.profiler.__exit__(None, None, None)
         self.step += 1
+
+class SMDebugCallback(pl.Callback):
+    def __init__(self, out_dir=None,
+                       export_tensorboard=False,
+                       tensorboard_dir=None,
+                       dry_run=False,
+                       reduction_config=None,
+                       save_config=None,
+                       include_regex=None,
+                       include_collections=None,
+                       save_all=False,
+                       include_workers="one",
+                    ):
+        super().__init__()
+        self.__dict__.update(locals())
+        
+    def on_fit_start(self, trainer, pl_module):
+        if Path(DEFAULT_CONFIG_FILE_PATH).exists():
+            debugger_hook = smd.Hook.create_from_json_file()
+        else:
+            debugger_hook = smd.Hook(out_dir=self.out_dir,
+                                     export_tensorboard=self.export_tensorboard,
+                                     tensorboard_dir=self.tensorboard_dir,
+                                     dry_run=self.dry_run,
+                                     reduction_config=self.reduction_config,
+                                     save_config=self.save_config,
+                                     include_regex=self.include_regex,
+                                     include_collections=self.include_collections,
+                                     save_all=self.save_all,
+                                     include_workers=self.include_workers,)
+        debugger_hook.register_module(pl_module)
+        debugger_hook.register_loss(pl_module.criterion)

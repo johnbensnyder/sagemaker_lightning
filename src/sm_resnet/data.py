@@ -12,9 +12,10 @@ import torchvision as tv
 
 import webdataset as wds
 
-world_size = int(os.environ.get("WORLD_SIZE", 1))
-rank = int(os.environ.get("RANK", 0))
-local_rank = int(os.environ.get("LOCAL_RANK", 0))
+from sm_resnet.utils import get_training_world, get_rank
+
+world = get_training_world()
+rank = get_rank()
 
 def mixup_data(x, y, alpha=1.0):
     
@@ -51,13 +52,14 @@ val_preproc = tv.transforms.Compose([
 
 def build_dataloader(data_dir, batch_size=128, num_workers=4, train=True):
     is_s3 = data_dir.startswith("s3")
-    paths = s3.ls(data_dir) if is_s3 else list(Path(data_dir).glob("*"))
-    file_nums = [int(re.findall(r'\d+', Path(i).stem)[0]) for i in paths]
-    base_name = Path(paths[0]).stem
-    base_name = base_name.replace(re.findall(r'\d+', base_name)[0], '')
-    files_per_rank = len(paths)//world_size
-    start_file = min(file_nums) # rank * files_per_rank
-    end_file = max(file_nums) # rank * files_per_rank + files_per_rank - 1
+    #paths = s3.ls(data_dir) if is_s3 else list(Path(data_dir).glob("*"))
+    #file_nums = [int(re.findall(r'\d+', Path(i).stem)[0]) for i in paths]
+    #base_name = Path(paths[0]).stem
+    #base_name = base_name.replace(re.findall(r'\d+', base_name)[0], '')
+    #files_per_rank = len(paths)//world['size']
+    base_name = "train_" if train else "val_"
+    start_file = 0 # files_per_rank * rank
+    end_file = 2047 if train else 127 # files_per_rank * (rank + 1) - 1
     if is_s3:
         wds_file_pattern = 'pipe:aws s3 cp {0}{{{1:04d}..{2:04d}}}.tar -'.format(os.path.join(data_dir, base_name), start_file, end_file)
     else:
@@ -65,7 +67,7 @@ def build_dataloader(data_dir, batch_size=128, num_workers=4, train=True):
     
     preproc = train_preproc if train else val_preproc
     
-    dataset = wds.WebDataset(wds_file_pattern).shuffle(64) \
+    dataset = wds.WebDataset(wds_file_pattern) \
                         .decode("pil").to_tuple("jpeg", "cls", "__key__").map_tuple(preproc, lambda x:x, lambda x:x)
     
     # sampler = torch.utils.data.distributed.DistributedSampler(dataset, num_replicas=world_size, rank=rank)

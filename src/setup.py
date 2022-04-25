@@ -13,7 +13,7 @@ setup(
     version="0.1",
     author="jbsnyder",
     url="https://github.com/johnbensnyder/sagemaker_lightning",
-    description="Resnet with PT Lightning",
+    description="Resnet test",
     packages=find_packages(),
     install_requires=install_requires,
 )

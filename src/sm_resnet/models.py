@@ -7,6 +7,7 @@ import pl_bolts
 from sm_resnet.utils import is_smddp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from sm_resnet.data import mixup_data, mixup_criterion, build_dataloader
+from sm_resnet.dist import is_distributed, get_local_rank
 
 from torch.cuda.amp import autocast, GradScaler
 
@@ -52,9 +53,6 @@ class ResNet(pl.LightningModule):
         self.model = resnets[resnet_version]()
         linear_size = list(self.model.children())[-1].in_features
         self.model.fc = torch.nn.Linear(linear_size, num_classes)
-        '''if world_size>1:
-            device = torch.device(f'cuda:{local_rank}') 
-            self.model = DDP(self.model.to(device), device_ids=[local_rank])'''
             
         self.optimizer = optimizers[optimizer]
         
@@ -66,7 +64,7 @@ class ResNet(pl.LightningModule):
         return opt
     
     def forward(self, X):
-        return self(X)
+        return self.model(X)
     
     def train_dataloader(self):
         return build_dataloader(self.train_path, self.batch_size, self.dataloader_workers, train=True)

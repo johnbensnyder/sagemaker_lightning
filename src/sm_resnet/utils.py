@@ -49,3 +49,17 @@ def is_smddp():
     if not isinstance(additional_framework_parameters, dict):
         return False
     return bool(additional_framework_parameters.get('sagemaker_distributed_dataparallel_enabled', False))
+
+def get_rank():
+    if 'OMPI_COMM_WORLD_RANK' in os.environ:
+        return int(os.environ['OMPI_COMM_WORLD_RANK'])
+    if 'RANK' in os.environ:
+        return int(os.environ['RANK'])
+    return 0
+    
+def get_world_size():
+    if 'OMPI_COMM_WORLD_SIZE' in os.environ:
+        return int(os.environ['OMPI_COMM_WORLD_SIZE'])
+    if 'WORLD_SIZE' in os.environ:
+        return int(os.environ['WORLD_SIZE'])
+    return 1
