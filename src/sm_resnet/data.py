@@ -14,7 +14,7 @@ import webdataset as wds
 
 from sm_resnet.utils import get_training_world, get_rank
 
-world = get_training_world()
+# world = get_training_world()
 rank = get_rank()
 
 def mixup_data(x, y, alpha=1.0):

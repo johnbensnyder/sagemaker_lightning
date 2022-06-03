@@ -14,9 +14,11 @@ import webdataset as wds
 from sm_resnet.models import ResNet
 from sm_resnet.callbacks import PlSageMakerLogger, ProfilerCallback, SMDebugCallback
 from sm_resnet.utils import get_training_world, get_rank
+import smdebug.pytorch as smd
 from smdebug.core.reduction_config import ReductionConfig
 from smdebug.core.save_config import SaveConfig
 from smdebug.core.collection import CollectionKeys
+# from smdebug.core.utils import check_sm_training_env
 
 world = get_training_world()
 
@@ -81,13 +83,31 @@ def main(ARGS):
                       'precision': ARGS.precision,
                       'limit_train_batches': float(ARGS.train_batches) if ARGS.train_batches==1.0 else int(ARGS.train_batches),
                       'progress_bar_refresh_rate': 0,
-                      'callbacks': [PlSageMakerLogger(), 
+                      'callbacks': [PlSageMakerLogger(),
                                     SMDebugCallback()]
                       }
     
     model = ResNet(**model_params)
     trainer = pl.Trainer(**trainer_params)
-
+    
+    '''
+    # Setup Debugger
+    if check_sm_training_env():
+        smd.Hook.register_hook(model, model.criterion)
+    else:
+        reduction_config = ReductionConfig(['mean'])
+        save_config = SaveConfig(save_interval=25)
+        include_collections = [CollectionKeys.LOSSES]
+        hook = smd.Hook(out_dir='./smdebugger',
+                        export_tensorboard=True,
+                        tensorboard_dir='./tensorboard',
+                        reduction_config=reduction_config,
+                        save_config=save_config,
+                        include_regex=None,
+                        include_collections=include_collections,
+                        save_all=False,)
+    '''
+    
     trainer.fit(model)
 
 if __name__=='__main__':

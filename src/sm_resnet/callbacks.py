@@ -4,8 +4,12 @@ import torch
 import pytorch_lightning as pl
 from time import time
 from pathlib import Path
+import shutil
 
 import smdebug.pytorch as smd
+from smdebug.core.reduction_config import ReductionConfig
+from smdebug.core.save_config import SaveConfig
+from smdebug.core.collection import CollectionKeys
 from smdebug.core.config_constants import DEFAULT_CONFIG_FILE_PATH
 
 world_size = int(os.environ.get("WORLD_SIZE", 1))
@@ -83,20 +87,22 @@ class SMDebugCallback(pl.Callback):
                     ):
         super().__init__()
         self.__dict__.update(locals())
+        if out_dir:
+            assert not Path(out_dir).exists()
         
-    def on_fit_start(self, trainer, pl_module):
+    def on_fit_start(self, trainer, pl_module, stage=None):
         if Path(DEFAULT_CONFIG_FILE_PATH).exists():
-            debugger_hook = smd.Hook.create_from_json_file()
+            # smd.Hook.register_hook(pl_module.model, pl_module.criterion)
+            hook = smd.Hook.create_from_json_file()
         else:
-            debugger_hook = smd.Hook(out_dir=self.out_dir,
-                                     export_tensorboard=self.export_tensorboard,
-                                     tensorboard_dir=self.tensorboard_dir,
-                                     dry_run=self.dry_run,
-                                     reduction_config=self.reduction_config,
-                                     save_config=self.save_config,
-                                     include_regex=self.include_regex,
-                                     include_collections=self.include_collections,
-                                     save_all=self.save_all,
-                                     include_workers=self.include_workers,)
-        debugger_hook.register_module(pl_module)
-        debugger_hook.register_loss(pl_module.criterion)
+            hook = smd.Hook(out_dir=self.out_dir,
+                            export_tensorboard=self.export_tensorboard,
+                            tensorboard_dir=self.tensorboard_dir,
+                            reduction_config=self.reduction_config,
+                            save_config=self.save_config,
+                            include_regex=self.include_regex,
+                            include_collections=self.include_collections,
+                            save_all=self.save_all,
+                            include_workers=self.include_workers)
+        hook.register_module(pl_module)
+        hook.register_loss(pl_module.criterion)
